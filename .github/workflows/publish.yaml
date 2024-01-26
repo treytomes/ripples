@@ -13,7 +13,7 @@ jobs:
   publish:
     uses: sebnozzi/minimicro-actions/.github/workflows/itch-deploy.yaml@main
     with:
-      minidisk_main_file: ripples.ms
+      minidisk_main_file: main.ms
       # minidisk_additional_entries: >-
       #   morning-mood-autumn.jpg
       #   window_1280.png
