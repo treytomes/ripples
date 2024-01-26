@@ -4,7 +4,7 @@ name: Publish
 on:
   push:
     branches:
-      - master
+      - main
   # Leave if you want to trigger builds manually
   workflow_dispatch:
 
