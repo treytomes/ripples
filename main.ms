@@ -3,6 +3,7 @@ ensureImport "events"
 ensureImport "listUtil"
 ensureImport "mathUtil"
 ensureImport "tc"
+ensureImport "canon"
 
 Display = {
     "text": display(3),
@@ -39,31 +40,33 @@ BASE_SIZE = 40
 WATER_COLOR = "#000060FF"
 RIPPLE_COLOR = color.white
 RIPPLE_OFFSET_COLOR = color.lerp(RIPPLE_COLOR, WATER_COLOR, 0.5)
+RIPPLE_LIFESPAN = 5
 
 BALLOON_IMAGE = img("Balloon")
 BALLOON_SPEED_Y = SPEED_MULTIPLIER / 2
 MAX_BALLOONS = 15
+BALOON_LIFESPAN = 30 // seconds
 
 Colors = [
-	color.red,
-	color.green,
-	color.blue,
-	color.yellow,
-	color.aqua,
-	color.black,
-	color.brown,
-	color.fuchsia,
-	color.gray,
-	color.lime,
-	color.maroon,
-	color.navy,
-	color.olive,
-	color.orange,
-	color.pink,
-	color.purple,
-	color.silver,
-	color.teal,
-	color.white,
+color.red,
+color.green,
+color.blue,
+color.yellow,
+color.aqua,
+color.black,
+color.brown,
+color.fuchsia,
+color.gray,
+color.lime,
+color.maroon,
+color.navy,
+color.olive,
+color.orange,
+color.pink,
+color.purple,
+color.silver,
+color.teal,
+color.white,
 ]
 
 randomColor = function(alpha = 255)
@@ -84,6 +87,7 @@ Ripple.init = function(x, y)
 	self.size = BASE_SIZE
 	self.color = RIPPLE_COLOR
 	self.offsetColor = RIPPLE_OFFSET_COLOR
+	self.deathTime = time + RIPPLE_LIFESPAN
 	return self
 end function
 
@@ -120,7 +124,7 @@ Ripple.update = function(deltaTime)
 		c.multiplyBy 1 - colorFactor * (1 - self.scale)
 		self.offsetColor = color.fromList(c)
 		
-		if c[0] < 1 then self.isAlive = false
+		if c[0] < 1 or time > self.deathTime then self.isAlive = false
 	end if
 end function
 
@@ -131,6 +135,7 @@ Balloon.init = function(x, y, c = null)
 	self.startY = y
 	self.isAlive = true
 	self.initialY = BALLOON_IMAGE.height
+	self.deathTime = time + BALOON_LIFESPAN
 	
 	if c == null then
 		c = randomColor(192)
@@ -171,7 +176,7 @@ Balloon.update = function(deltaTime)
 	
 	if self.initialY == 0 then
 		self.sprite.y += BALLOON_SPEED_Y * self.sprite.scale * deltaTime
-		if self.sprite.y >= gfx.height then self.isAlive = false
+		if self.sprite.y >= gfx.height or time > self.deathTime then self.isAlive = false
 		
 		deltaY = self.sprite.y - self.startY
 		self.reflectedSprite.y = 2 * self.startY - BALLOON_IMAGE.height * self.sprite.scale - self.sprite.y
@@ -235,14 +240,14 @@ generateBalloon = function(x=null, y=null, c=null)
 		delay = 1 + rnd * 3
 		events.eventLoop.doAfter delay, @generateBalloon
 	end if
-
+	
 	if balloons.len >= MAX_BALLOONS then return
 	
 	if x == null then x = floor(rnd * gfx.width)
 	if y == null then y = floor(rnd * WATER_HEIGHT)
 	
 	makeRipple = function()
-		ripples.push Ripple.make(x, y)
+		if ripples.len < 30 then ripples.push Ripple.make(x, y)
 	end function
 	
 	numRipples = floor(rnd * 5) + 1
@@ -263,18 +268,115 @@ events.eventLoop.onKeyDown["escape"] = function
 	self.stop
 end function
 
-events.eventLoop.onClick = function
-	if mouse.button(0) then
-		if mouse.y < WATER_HEIGHT then
-			rx = mouse.x
-			ry = mouse.y
-			generateBalloon rx, ry
+// events.eventLoop.onClick = function
+// 	if mouse.button(0) then
+// 		if mouse.y < WATER_HEIGHT then
+// 			rx = mouse.x
+// 			ry = mouse.y
+// 			generateBalloon rx, ry
+// 		end if
+// 	end if
+// end function
+
+calculateYForNote = function(octave, noteName)
+	noteNumber = canon.baseNoteForOctave(octave) + canon.Notes[noteName]
+	noteLength = canon.highestNoteNumber - canon.lowestNoteNumber
+	percentageDistanceInRange = (noteNumber - canon.lowestNoteNumber) / noteLength
+	
+	// Only allow balloons halfway up the water height.
+	// Might help with performance.
+	y = percentageDistanceInRange * (WATER_HEIGHT * 0.75)
+	return y
+end function
+
+playQuarterNote = function
+	if (canon.iteration % 5 == 0) and time >= canon.nextNoteTime then
+		octave = canon.song[canon.songIndex][0] + 2
+		chordName = canon.song[canon.songIndex][1]
+		chord = canon.Chords[chordName]
+		noteName = chord[canon.noteIndex]
+		duration = canon.song[canon.songIndex][2] / 4
+		
+		canon.playNote(octave, noteName, duration)
+		
+		canon.nextNoteTime = time + duration
+		
+		// Allow the high notes to walk randomly.
+		delta = floor(rnd * 2)
+		if delta == 0 then delta = -1
+		canon.noteIndex = canon.noteIndex + delta
+		
+		if canon.noteIndex >= chord.len then canon.noteIndex = 0
+		if canon.noteIndex < 0 then canon.noteIndex = chord.len - 1
+		
+		x = floor(rnd * gfx.width)
+		y = calculateYForNote(octave, noteName)
+		generateBalloon x, y
+	end if
+end function
+
+playHalfNote = function
+	if (canon.iteration % 3 == 0) and time >= canon.nextHalfTime then
+		octave = canon.song[canon.songIndex][0] + 1
+		chordName = canon.song[canon.songIndex][1]
+		chord = canon.Chords[chordName]
+		duration = canon.song[canon.songIndex][2] / 2
+		
+		// Allow the middle notes to walk randomly.
+		delta = floor(rnd * 2)
+		if delta == 0 then delta = -1
+		canon.halfIndex = canon.halfIndex + delta
+		if canon.halfIndex >= chord.len then canon.halfIndex = 0
+		if canon.halfIndex < 0 then canon.halfIndex = chord.len - 1
+		noteName = chord[canon.halfIndex]
+		
+		canon.playHalfNote(octave, noteName, duration)
+		
+		canon.nextHalfTime = time + duration
+		
+		if canon.iteration % 5 != 0 then
+			x = floor(rnd * gfx.width)
+			y = calculateYForNote(octave, noteName)
+			generateBalloon x, y
+		end if
+	end if
+end function
+
+playChord = function
+	// The bass chords really need to walk sequentially.
+	if time >= canon.nextChordTime then
+		octave = canon.song[canon.songIndex][0]
+		chordName = canon.song[canon.songIndex][1]
+		duration = canon.song[canon.songIndex][2]
+		
+		canon.playChord(octave, chordName, duration)
+		canon.nextChordTime = time + duration
+		canon.songIndex += 1
+		
+		if canon.songIndex >= canon.song.len then
+			canon.songIndex = 0
+			canon.iteration += 1
+		end if
+		
+		if (canon.iteration % 3 != 0) and (canon.iteration % 5 != 0) then
+			chord = canon.Chords[chordName]
+			noteName = chord[floor(rnd * 3)]
+			x = floor(rnd * gfx.width)
+			y = calculateYForNote(octave, noteName)
+			generateBalloon x, y
 		end if
 	end if
 end function
 
 events.eventLoop.onUpdate = function
 	clr color.clear
+	
+	// text.row=3
+	// text.col=0
+	// text.color=color.white
+	// print "# balloons: " + balloons.len + "     "
+	// print "# ripples: " + ripples.len + "     "
+	// print "Elapsed: " + ((time - startTime) / 60) + "     "
 	
 	liveRipples = []
 	for r in ripples
@@ -297,7 +399,12 @@ events.eventLoop.onUpdate = function
 			b.cleanup
 		end if
 	end for
+	// I'm not sure the balloons are always dying when they should.
 	globals.balloons = liveBalloons
+	
+	playQuarterNote
+	playHalfNote
+	playChord
 	
 	flip
 end function
@@ -312,7 +419,16 @@ Display.background = new PixelDisplay
 Display.background.install 7
 Display.background.drawImage generateWater, 0, 0
 
-events.eventLoop.doAfter 0, @generateBalloon
+// events.eventLoop.doAfter 0, @generateBalloon
+
+canon.playForever = false
+canon.totalDurationSeconds = 60 * 60
+canon.endTime = time + canon.totalDurationSeconds
+canon.nextChordTime = time + 3
+canon.nextHalfTime = time + 3
+canon.nextNoteTime = time + 3
+
+startTime = time
 
 events.eventLoop.run
 
@@ -323,3 +439,4 @@ gfx.clear
 display(4).clear
 text.clear
 
+reset

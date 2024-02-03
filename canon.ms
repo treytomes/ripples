@@ -96,16 +96,22 @@ playNote = function(octave, noteName, duration)
     notePlayer.play
 end function
 
+baseOctave = 4
+highOctave = baseOctave + 2
+lowestNoteNumber = baseNoteForOctave(baseOctave)
+highestNoteNumber = baseNoteForOctave(highOctave) + Notes["B"]
+
 song = [
-    [ 4, "D", dur1 ],
-    [ 4, "A", dur1 ],
-    [ 4, "Bm", dur1 ],
-    [ 4, "F#m", dur1 ],
-    [ 4, "G", dur1 ],
-    [ 4, "D", dur1 ],
-    [ 4, "G", dur1 ],
-    [ 4, "A", dur1 ],
+    [ baseOctave, "D", dur1 ],
+    [ baseOctave, "A", dur1 ],
+    [ baseOctave, "Bm", dur1 ],
+    [ baseOctave, "F#m", dur1 ],
+    [ baseOctave, "G", dur1 ],
+    [ baseOctave, "D", dur1 ],
+    [ baseOctave, "G", dur1 ],
+    [ baseOctave, "A", dur1 ],
 ]
+
 
 nextChordTime = time
 nextHalfTime = time
@@ -114,78 +120,82 @@ songIndex = 0
 halfIndex = 0
 noteIndex = 0
 
-iteration = 1 + 8
+iteration = 1
 
 totalDurationSeconds = 60
 endTime = time + totalDurationSeconds
 isDone = false
 playForever = false
 
-text.clear
-while not isDone
-    text.row = 1
-    text.colume = 5
-    print "Remaining time: " + (endTime - time)
+main = function
+    text.clear
+    while not isDone
+        text.row = 1
+        text.colume = 5
+        print "Remaining time: " + (endTime - time)
 
-    if (iteration % 5 == 0) and time >= nextNoteTime then
-        octave = song[songIndex][0] + 2
-        chordName = song[songIndex][1]
-        chord = Chords[chordName]
-        noteName = chord[noteIndex]
-        duration = song[songIndex][2] / 4
+        if (iteration % 5 == 0) and time >= nextNoteTime then
+            octave = song[songIndex][0] + 2
+            chordName = song[songIndex][1]
+            chord = Chords[chordName]
+            noteName = chord[noteIndex]
+            duration = song[songIndex][2] / 4
 
-        playNote(octave, noteName, duration)
+            playNote(octave, noteName, duration)
 
-        nextNoteTime = time + duration
-        
-        // Allow the high notes to walk randomly.
-        delta = floor(rnd * 2)
-        if delta == 0 then delta = -1
-        noteIndex = noteIndex + delta
+            nextNoteTime = time + duration
+            
+            // Allow the high notes to walk randomly.
+            delta = floor(rnd * 2)
+            if delta == 0 then delta = -1
+            noteIndex = noteIndex + delta
 
-        if noteIndex >= chord.len then noteIndex = 0
-        if noteIndex < 0 then noteIndex = chord.len - 1
-    end if
-
-    if (iteration % 3 == 0) and time >= nextHalfTime then
-        octave = song[songIndex][0] + 1
-        chordName = song[songIndex][1]
-        chord = Chords[chordName]
-        duration = song[songIndex][2] / 2
-        
-        // Allow the middle notes to walk randomly.
-        delta = floor(rnd * 2)
-        if delta == 0 then delta = -1
-        halfIndex = halfIndex + delta
-        if halfIndex >= chord.len then halfIndex = 0
-        if halfIndex < 0 then halfIndex = chord.len - 1
-        noteName = chord[halfIndex]
-
-        playHalfNote(octave, noteName, duration)
-
-        nextHalfTime = time + duration
-    end if
-
-    // The bass chords really need to walk sequentially.
-	if time >= nextChordTime then
-        octave = song[songIndex][0]
-        chordName = song[songIndex][1]
-        duration = song[songIndex][2]
-
-        playChord(octave, chordName, duration)
-
-        nextChordTime = time + duration
-
-        delta = 1 // floor(rnd * 2)
-        if delta == 0 then delta = -1
-        songIndex += delta
-
-        if songIndex >= song.len then
-            songIndex = 0
-            iteration += 1
-
-            if time >= endTime and not playForever then isDone = true
+            if noteIndex >= chord.len then noteIndex = 0
+            if noteIndex < 0 then noteIndex = chord.len - 1
         end if
-        // if songIndex < 0 then songIndex = song.len - 1
-	end if
-end while
+
+        if (iteration % 3 == 0) and time >= nextHalfTime then
+            octave = song[songIndex][0] + 1
+            chordName = song[songIndex][1]
+            chord = Chords[chordName]
+            duration = song[songIndex][2] / 2
+            
+            // Allow the middle notes to walk randomly.
+            delta = floor(rnd * 2)
+            if delta == 0 then delta = -1
+            halfIndex = halfIndex + delta
+            if halfIndex >= chord.len then halfIndex = 0
+            if halfIndex < 0 then halfIndex = chord.len - 1
+            noteName = chord[halfIndex]
+
+            playHalfNote(octave, noteName, duration)
+
+            nextHalfTime = time + duration
+        end if
+
+        // The bass chords really need to walk sequentially.
+        if time >= nextChordTime then
+            octave = song[songIndex][0]
+            chordName = song[songIndex][1]
+            duration = song[songIndex][2]
+
+            playChord(octave, chordName, duration)
+
+            nextChordTime = time + duration
+
+            delta = 1 // floor(rnd * 2)
+            if delta == 0 then delta = -1
+            songIndex += delta
+
+            if songIndex >= song.len then
+                songIndex = 0
+                iteration += 1
+
+                if time >= endTime and not playForever then isDone = true
+            end if
+            // if songIndex < 0 then songIndex = song.len - 1
+        end if
+    end while
+end function
+
+if locals == globals then main
